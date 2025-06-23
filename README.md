@@ -2,156 +2,159 @@
 
 ## 🧑‍💻 Discovered by:
 **Soyam Arya (aka honest_corrupt)**  
-- Ethical Hacker | CVE Researcher | Mobile & Web Pentester  
-- Blog: [https://soyamaryawork.blogspot.com](https://soyamaryawork.blogspot.com)  
-- GitHub: [https://github.com/honestcorrupt](https://github.com/honestcorrupt)  
-- LinkedIn: [https://www.linkedin.com/in/soyam-arya-a90356312/](https://www.linkedin.com/in/soyam-arya-a90356312/)
+Ethical Hacker | CVE Researcher | Mobile & Web Pentester  
+- Blog: https://soyamaryawork.blogspot.com  
+- GitHub: https://github.com/honestcorrupt  
+- LinkedIn: https://www.linkedin.com/in/soyam-arya-a90356312/
 
 ---
 
 ## 🕳️ Vulnerability Summary
-The **Google Photos Android App** stores sensitive data **in plaintext** within its local database and `.blob`/`.json`/`shared_prefs` files. This includes:
 
-- **Firebase Auth & Refresh Tokens**
-- **User Media Identifiers & Download URLs**
-- **Gaia IDs, Full Names, and Profile Picture URLs of Contacts**
-- **App Metadata and Interaction History**
+The Google Photos Android App insecurely stores sensitive information in plaintext within local `.blob`, `.json`, and `shared_prefs` files as well as SQLite databases. This includes:
 
-This poses a high privacy and security risk, especially on rooted/emulated environments used in forensic analysis, pen-testing, or when malware gains local data access.
+- Firebase Installation ID (FID), AuthToken, and RefreshToken
+- Media Download URLs from Google's video storage
+- User’s PII (names, gaia IDs, profile photo URLs, phone numbers)
+- Internal Firebase heartbeat, analytics, and sync identifiers
+- Contact database and app usage metadata
+
+All of these are stored without encryption or access controls in rooted/emulated environments, posing a serious security and privacy concern.
 
 ---
 
 ## 📌 CVE Class
-- **CWE-922: Insecure Storage of Sensitive Information**
-- **CWE-312: Cleartext Storage of Sensitive Information**
-- **OWASP Mobile Top 10: M2 - Insecure Data Storage**
+- **CWE-922:** Insecure Storage of Sensitive Information
+- **CWE-312:** Cleartext Storage of Sensitive Information
+- **OWASP Mobile Top 10:** M2 - Insecure Data Storage
 
 ---
 
 ## 🎯 Target App
-``
-Package Name: com.google.android.apps.photos
-Platform: Android
-Tested Version: Latest (as of June 2025)
-Environment: Genymotion Emulator (rooted), Android SDK 29+
+- **Package Name:** com.google.android.apps.photos
+- **Platform:** Android
+- **Tested Version:** Latest (June 2025)
+- **Environment:** Rooted Genymotion Emulator (Android 10, SDK 29+)
 
+---
 
+## 📂 Affected Files & Data Leaks
 
-
-## 📂 Affected Files & Leaks
-### 1. Shared Preferences
+### 🔹 1. Shared Preferences
 **File:** `/data/data/com.google.android.apps.photos/shared_prefs/FirebaseHeartBeat<...>.xml`
-``xml
-<map>
-  <string name="last-used-date">2025-06-23</string>
-  <long name="fire-global" value="1750606294965" />
-</map>
+- Dates and component versions linked to Firebase usage
 
-**File:** `gms_icing_mdd_garbage_file`, `mdd_pds_config`, `phenotype`, etc. – containing internal configs and sync info.
+**File:** `phenotype`, `phenotype_storage_info`, `gms_icing_mdd_garbage_file`, `mdd_pds_config`
+- Contain internal tracking/sync config and experiment flags
 
-### 2. Firebase Auth Tokens
-**File:** `.json` blobs in app files directory:
-``json
+### 🔹 2. Firebase Auth Tokens (Highly Sensitive)
+**Location:** `.json` files in `/data/data/com.google.android.apps.photos/files/`
+```json
 {
   "Fid": "cchxPuvCQYOAXImt-9TF9s",
   "AuthToken": "eyJhbGciOi...",
-  "RefreshToken": "3_AS3qfwL...",
+  "RefreshToken": "3_AS3qfwLFpXH...",
   "ExpiresInSecs": 604800
 }
-`
-> ⚠️ These tokens allow potential unauthorized backend API access if exploited timely.
-
-### 3. User Data
-**From SQLite DB dump:**
-`text
-_id  | package_name                  | localization_quality
------------------------------------------------------------
-...  | com.whatsapp                  | 1
-...  | com.snapchat.android          | 1
-...  | com.google.android.apps.docs  | 1
-`
-
-**From profile/contact DB table:**
-``text
-display_name: Soyam Arya
-profile_photo_url: https://lh3.googleusercontent.com/a/ACg8ocKibs...
-gaia_id: 118013611367854136651
-phone_number: +91 6205695120
-`
-
-### 4. Media Identifiers
-**In local blob files (Notepad decoded):**
 ```
-,AF1QipOl_j2mF3BZWW4vzhq6FF47YXenQQ4Hvoi_F3nC
-,AF1QipMGVKgHvjUdpfBqCVWW8PzHFmaNO_8URR2215ur
-https://video-downloads.googleusercontent.com/ADGPM2kCZHcLRaMX...
+> ⚠️ These tokens, if extracted and used before expiration, could potentially access backend APIs or services.
+
+### 🔹 3. Personally Identifiable Information (PII)
+**Source:** `photos.db` & blob file dumps
+
+**Data Extracted:**
+- display_name`: *Soyam Arya*, *amandeep verma*, etc.
+- gaia_id`: *118013611367854136651*, etc.
+- profile_photo_url`: `https://lh3.googleusercontent.com/a/...`
+- phone_number`: `+91 6205695120`
+
+### 🔹 4. Contact & App Metadata Table
+From SQLite:
+``
+_id | package_name                  | localization_quality
+-----------------------------------------------------------
+... | com.whatsapp                 | 1
+... | com.snapchat.android         | 1
+... | com.google.android.apps.docs | 1
+... | com.google.android.apps.dynamite | 1
+... | com.facebook.katana          | 1
+... | com.twitter.android (X)      | 1
+... | com.signal.android           | 1
+``
+
+### 🔹 5. Media Identifiers & Download Links
+From `.blob` and `.json` files:
+- Example Media IDs:
+  - AF1QipOl_j2mF3BZWW4vzhq6FF47YXenQQ4Hvoi_F3nC`
+  - AF1QipMA7Bn_aLQfjLPnWiS_hIkXS-QG`
+
+- Example Video Download Link:
+```
+https://video-downloads.googleusercontent.com/ADGPM2kCZHcLRaMXsQ61P0uDji2CQmUqv4TH6JAfakbji7JsPVogoP5llNOxLs9nK_qW8ZxGfDaKgiWoVYXNuoWOA98JKoFPqf43wQ1YvTwhoThhIyn71AJzvZtQwaokQPo0pmZgM2FZ4Jrj8gNKPRL-slsFcIdxGqy2VPE9b-XzUuGgTjqEzYs
 ```
 
 ---
 
 ## 📽️ Video PoC
-> **Note:** This repo provides *only data samples*. To view the full step-by-step exploitation, see the **Video PoC** here:  
-➡️ **[https://drive.google.com/drive/folders/1N1_uYzqBOer-VCn-TYxysCui9UBEFxTa?usp=sharing]**
+> **Note:** This repo provides only data samples. For full exploitation steps, watch the **video PoC**:
+➡️ [Google Drive Video](https://drive.google.com/drive/folders/1N1_uYzqBOer-VCn-TYxysCui9UBEFxTa?usp=sharing)
 
 ---
 
-## 🔍 How It Was Found
-1. **Setup:**
-   - Used Genymotion rooted emulator
-   - Installed latest Google Photos app via APK
-2. **ADB Exploration:**
-   ```bash
-   adb shell
-   su
-   cd /data/data/com.google.android.apps.photos/
-   ```
-3. **Data Extraction:**
-   - `shared_prefs/*.xml`
-   - `files/*.json` and `*.blob`
-   - SQLite local DB (`databases/photos.db`)
-4. **Decoded Blobs & Tokens:**
-   - Used Notepad++/Hex viewer to open blobs
-   - Pulled and decoded Firebase tokens
+## 🔍 How I Found It
+**Setup:**
+- Genymotion (rooted)
+- Installed Google Photos app (latest APK)
+
+**Exploration Steps:**
+1. ADB access: `adb shell && su`
+2. Accessed files:
+   - `/data/data/com.google.android.apps.photos/shared_prefs/*.xml`
+   - `/files/*.blob` and `.json`
+   - `/databases/photos.db`
+3. Decoded binary blob using Notepad++ & hex viewers
+4. Verified presence of real PII & Firebase tokens
 
 ---
 
-## 🔐 Risk Level: **High**
-### Justification:
-- Firebase `AuthToken` + `RefreshToken` = **Access to Backend APIs**
-- Stored in **unencrypted**, **easily retrievable** files
-- Presence of **Gaia IDs** and **profile pictures** adds **PII** leakage
-- No expiration or revocation enforced in-app for local tokens
+## 🔐 Risk Level: HIGH
+- Firebase tokens allow unauthorized backend access
+- Tokens & PII stored in unencrypted formats
+- Exposure of Gaia IDs and user media links is a major privacy leak
+- Suitable for session hijacking, impersonation, or data scraping
 
 ---
 
 ## 🛠️ Recommendations
-- Encrypt sensitive shared preference and blob data
-- Move token storage to encrypted `EncryptedSharedPreferences` or Keystore
-- Avoid storing tokens longer than session scope
-- Secure `.blob` and media identifiers
+- Encrypt all tokens using Android Keystore or EncryptedSharedPreferences
+- Avoid long-term token storage
+- Obfuscate or restrict access to `.blob` and `.json` directories
+- Sanitize local storage of contact/metadata entries
 
 ---
 
 ## 📬 Reporting
-Google has not been contacted before this CVE request. The issue is being disclosed through [CVE.org (MITRE)](https://cve.mitre.org/) independently for public interest and awareness.
+This issue has **not been reported to Google**. CVE is requested directly via [CVE.org (MITRE)] for public security awareness.
 
 ---
 
 ## 🏷️ Tags
-```
 #android #firebase #photos #cve #insecurestorage #plaintext #bugbounty #ethicalhacking #firebasepoc #privacy
-```
 
 ---
 
 ## 📁 Disclaimer
-This repository is for **educational and responsible disclosure** purposes only. The data shown is collected from a testing environment and not associated with any real users.
-
-> 📌 CVE Request Submitted via CVE.org – Pending CVE ID
+This repository is for educational and ethical research only. Data was extracted from a clean emulator. No real users were impacted.
 
 ---
 
-## 🔗 Author Contact
-- 📧 soyamarya96ethical@gmail.com
-- 💻 [https://github.com/honestcorrupt](https://github.com/honestcorrupt)
-- 🔐 CVE-2025-5154 holder
+## 🧾 CVE Status
+📌 **CVE Request submitted via CVE.org – Pending ID**
+
+---
+
+## 🔗 Contact
+**Soyam Arya (aka honest_corrupt)**  
+📧 soyamarya96ethical@gmail.com  
+🔐 CVE-2025-5154 holder  
+💻 https://github.com/honestcorrupt
